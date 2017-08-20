@@ -1,0 +1,8 @@
+[requires]
+OpenVDB/4.0.2@zogi/stable
+
+[options]
+openvdb:shared=False
+
+[generators]
+cmake

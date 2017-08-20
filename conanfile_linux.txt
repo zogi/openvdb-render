@@ -1,0 +1,13 @@
+[requires]
+OpenVDB/4.0.2@zogi/stable
+
+[options]
+openvdb:shared=False
+openvdb:fPIC=True
+blosc:fPIC=True
+OpenEXR:fPIC=True
+ilmbase:fPIC=True
+Boost:fPIC=True
+
+[generators]
+cmake

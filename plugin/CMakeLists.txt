@@ -14,30 +14,13 @@ endif ()
 find_package(Maya)
 find_package(Boost COMPONENTS regex)
 
-if (NOT ILMBASE_ROOT)
-    set(ILMBASE_ROOT $ENV{ILMBASE_ROOT})
-endif ()
-
-find_path(OPENVDB_INCLUDE
-    NAMES openvdb/openvdb.h
-    HINTS $ENV{OPENVDB_ROOT}/include)
 include_directories(${LUMA_NODE_ID_INCLUDE})
-include_directories(${OPENVDB_INCLUDE})
 include_directories(${Boost_INCLUDE_DIRS})
-include_directories(SYSTEM ${ILMBASE_ROOT}/include) #register is deprecated with c++11
-
 include_directories(${MAYA_INCLUDE_DIRS})
 link_directories(${MAYA_LIBRARY_DIR})
 
 set(MAYA_LIBS OpenMaya Foundation OpenMayaAnim OpenMayaFX OpenMayaUI OpenMayaRender)
 
-if (WIN32)
-    find_library(OPENVDB_STATIC_LIBRARY
-        NAMES libopenvdb
-        HINTS $ENV{OPENVDB_ROOT}/lib)
-else ()
-    find_library(OPENVDB_STATIC_LIBRARY NAMES libopenvdb.a)
-endif ()
 find_package(OpenGL REQUIRED)
 
 file(GLOB SRC *.cpp)
@@ -64,7 +47,7 @@ if (WIN32)
     set_target_properties(${PLUGIN_NAME} PROPERTIES SUFFIX ".mll")
 endif ()
 
-target_link_libraries(${PLUGIN_NAME} ${OPENGL_gl_LIBRARY} ${MAYA_LIBS} ${OPENVDB_STATIC_LIBRARY} ${Boost_LIBRARIES})
+target_link_libraries(${PLUGIN_NAME} ${OPENGL_gl_LIBRARY} ${MAYA_LIBS} ${Boost_LIBRARIES} ${CONAN_LIBS})
 if (USE_CUDA)
     target_link_libraries(${PLUGIN_NAME} ${CUDA_STATIC_LIBRARIES})
 endif ()
