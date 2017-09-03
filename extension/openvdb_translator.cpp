@@ -6,6 +6,12 @@
 
 #include "shader_translator.h"
 
+#ifdef WIN32
+#define PROCEDURAL_EXTENSION ".dll"
+#else
+#define PROCEDURAL_EXTENSION ".so"
+#endif
+
 void* OpenvdbTranslator::creator()
 {
     return new OpenvdbTranslator();
@@ -117,7 +123,7 @@ void OpenvdbTranslator::Export(AtNode* volume)
     if (!mtoa_path)
         return;
     AiNodeSetStr(volume, "dso",
-                 (std::string(mtoa_path) + std::string("procedurals/volume_openvdb.so")).c_str());
+                 (std::string(mtoa_path) + std::string("/procedurals/volume_openvdb" PROCEDURAL_EXTENSION)).c_str());
 
 #if MTOA12
     ExportMatrix(volume, 0);
