@@ -111,8 +111,13 @@ void check_arnold_nodes(AtNode* node, std::set<AtNode*>& checked_arnold_nodes, s
 
 void OpenvdbTranslator::Export(AtNode* volume)
 {
+    const char* mtoa_path = getenv("MTOA_PATH");
+    if (!mtoa_path)
+        mtoa_path = getenv("MTOA_ROOT");
+    if (!mtoa_path)
+        return;
     AiNodeSetStr(volume, "dso",
-                 (std::string(getenv("MTOA_PATH")) + std::string("procedurals/volume_openvdb.so")).c_str());
+                 (std::string(mtoa_path) + std::string("procedurals/volume_openvdb.so")).c_str());
 
 #if MTOA12
     ExportMatrix(volume, 0);
