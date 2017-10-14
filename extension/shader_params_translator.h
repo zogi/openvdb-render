@@ -52,7 +52,11 @@ public:
             std::vector<pair_t> sorted_values;
             sorted_values.resize(indexes_size);
             for (auto i = 0u; i < indexes_size; ++i) {
+#if AI_VERSION_ARCH_NUM <= 4
                 sorted_values[i].first = CLAMP(positions[i], 0.0f, 1.0f);
+#else
+                sorted_values[i].first = AiClamp(positions[i], 0.0f, 1.0f);
+#endif
                 convert_maya_to_arnold(sorted_values[i].second, values[i]);
             }
             std::sort(sorted_values.begin(), sorted_values.end(), [](const pair_t& a, const pair_t& b) {

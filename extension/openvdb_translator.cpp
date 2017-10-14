@@ -1,5 +1,7 @@
 #include "openvdb_translator.h"
 
+#include <ai_version.h>
+
 #include <set>
 #include <functional>
 #include <array>
@@ -20,6 +22,7 @@ void* OpenvdbTranslator::creator()
 AtNode* OpenvdbTranslator::CreateArnoldNodes()
 {
     AtNode* volume = AddArnoldNode("volume");
+#if AI_VERSION_ARCH_NUM < 4
     if (!FindMayaPlug("overrideShader").asBool()) {
         if (FindMayaPlug("shaderMode").asShort() == 0) {
             AddArnoldNode("openvdb_shader", "shader");
@@ -27,6 +30,9 @@ AtNode* OpenvdbTranslator::CreateArnoldNodes()
             AddArnoldNode("openvdb_simple_shader", "shader");
         }
     }
+#else
+    AddArnoldNode("standard_volume", "shader");
+#endif
     return volume;
 }
 
@@ -61,10 +67,16 @@ void iterate_param_links(AtNode* node, const char* param_name, int param_type, l
             iterate_param_elems<rgba_elems.size()>(node, param_name, rgba_elems, func);
             break;
         case AI_TYPE_VECTOR:
+#if AI_VERSION_ARCH_NUM <= 4
         case AI_TYPE_POINT:
+#endif
             iterate_param_elems<vec_elems.size()>(node, param_name, vec_elems, func);
             break;
+#if AI_VERSION_ARCH_NUM <= 4
         case AI_TYPE_POINT2:
+#else
+        case AI_TYPE_VECTOR2:
+#endif
             iterate_param_elems<vec2_elems.size()>(node, param_name, vec2_elems, func);
             break;
         default:
@@ -88,7 +100,11 @@ void check_arnold_nodes(AtNode* node, std::set<AtNode*>& checked_arnold_nodes, s
 
     auto check_channel = [&node, &out_grids](const char* channel) {
         auto ch = AiNodeGetStr(node, channel);
+#if AI_VERSION_ARCH_NUM <= 4
         if (ch != nullptr && ch[0] != '\0') {
+#else
+        if (!ch.empty()) {
+#endif
             out_grids.insert(std::string(ch));
         }
     };
@@ -100,10 +116,10 @@ void check_arnold_nodes(AtNode* node, std::set<AtNode*>& checked_arnold_nodes, s
         auto param_name = AiParamGetName(param_entry);
         const auto param_type = AiParamGetType(param_entry);
         if (param_type == AI_TYPE_STRING) {
-            auto volume_sample = false;
+            auto volume_sample_value = false;
             constexpr auto volume_sample_name = "volume_sample";
-            if (AiMetaDataGetBool(node_entry, AiParamGetName(param_entry), volume_sample_name, &volume_sample) &&
-                volume_sample) {
+            if (AiMetaDataGetBool(node_entry, AiParamGetName(param_entry), volume_sample_name, &volume_sample_value) &&
+                volume_sample_value) {
                 check_channel(AiParamGetName(param_entry));
             }
         } else {
@@ -115,6 +131,7 @@ void check_arnold_nodes(AtNode* node, std::set<AtNode*>& checked_arnold_nodes, s
     AiParamIteratorDestroy(param_iter);
 }
 
+#if AI_VERSION_ARCH_NUM <= 4
 void OpenvdbTranslator::Export(AtNode* volume)
 {
     const char* mtoa_path = getenv("MTOA_PATH");
@@ -253,6 +270,119 @@ void OpenvdbTranslator::Export(AtNode* volume)
     AiNodeSetByte(volume, "visibility", visibility);
     AiNodeSetBool(volume, "self_shadows", FindMayaPlug("selfShadows").asBool());
 }
+#else
+// Export an Arnold 5 volume node and standard_volume shader.
+void OpenvdbTranslator::Export(AtNode* volume)
+{
+    ExportMatrix(volume);
+    AiNodeSetStr(volume, "filename", FindMayaPlug("outVdbPath").asString().asChar());
+
+    ProcessParameter(volume, "min", AI_TYPE_VECTOR, "bboxMin");
+    ProcessParameter(volume, "max", AI_TYPE_VECTOR, "bboxMax");
+
+    // Grids.
+    std::set<std::string> out_grids;
+    const auto addIfNotEmpty = [&out_grids](const std::string& grid_name) {
+        if (!grid_name.empty())
+            out_grids.insert(grid_name);
+    };
+    addIfNotEmpty(FindMayaPlug("svDensityChannel").asString().asChar());
+    addIfNotEmpty(FindMayaPlug("svScatterColorChannel").asString().asChar());
+    addIfNotEmpty(FindMayaPlug("svTransparentChannel").asString().asChar());
+    addIfNotEmpty(FindMayaPlug("svEmissionChannel").asString().asChar());
+    addIfNotEmpty(FindMayaPlug("svTemperatureChannel").asString().asChar());
+    AtArray* grid_names = AiArrayAllocate(static_cast<unsigned int>(out_grids.size()), 1, AI_TYPE_STRING);
+    unsigned int id = 0;
+    for (const auto& out_grid : out_grids) {
+        AiArraySetStr(grid_names, id, out_grid.c_str());
+        ++id;
+    }
+    AiNodeSetArray(volume, "grids", grid_names);
+
+    // Velocity grids.
+    MString velocity_grids_string = FindMayaPlug("velocity_grids").asString();
+    MStringArray velocity_grids;
+    velocity_grids_string.split(' ', velocity_grids);
+    const unsigned int velocity_grids_count = velocity_grids.length();
+    if (velocity_grids_count > 0) {
+        AtArray* velocity_grid_names = AiArrayAllocate(velocity_grids_count, 1, AI_TYPE_STRING);
+        for (unsigned int i = 0; i < velocity_grids_count; ++i)
+            AiArraySetStr(velocity_grid_names, i, velocity_grids[i].asChar());
+        AiNodeSetArray(volume, "velocity_grids", velocity_grid_names);
+        AiNodeSetFlt(volume, "velocity_scale", FindMayaPlug("velocityScale").asFloat());
+        AiNodeSetFlt(volume, "velocity_fps", FindMayaPlug("velocityFps").asFloat());
+        AiNodeSetFlt(volume, "motion_start", FindMayaPlug("velocityShutterStart").asFloat());
+        AiNodeSetFlt(volume, "motion_end", FindMayaPlug("velocityShutterEnd").asFloat());
+    }
+
+    AiNodeSetFlt(volume, "bounds_slack", FindMayaPlug("boundsSlack").asFloat());
+
+    const float sampling_quality = FindMayaPlug("samplingQuality").asFloat();
+    const float voxel_size = FindMayaPlug("voxelSize").asFloat();
+    AiNodeSetFlt(volume, "step_size", voxel_size / (sampling_quality / 100.0f));
+
+    AiNodeSetBool(volume, "matte", FindMayaPlug("matte").asBool());
+
+    AiNodeSetBool(volume, "receive_shadows", FindMayaPlug("receiveShadows").asBool());
+
+    AiNodeSetByte(volume, "visibility", ComputeVisibility());
+
+    AtByte visibility = 0;
+    if (FindMayaPlug("primaryVisibility").asBool()) {
+        visibility |= AI_RAY_CAMERA;
+    }
+    if (FindMayaPlug("castsShadows").asBool()) {
+        visibility |= AI_RAY_SHADOW;
+    }
+    if (FindMayaPlug("visibleInDiffuseTransmissions").asBool()) {
+        visibility |= AI_RAY_DIFFUSE_TRANSMIT;
+    }
+    if (FindMayaPlug("visibleInSpecularTransmissions").asBool()) {
+        visibility |= AI_RAY_SPECULAR_TRANSMIT;
+    }
+    if (FindMayaPlug("visibleInVolumes").asBool()) {
+        visibility |= AI_RAY_VOLUME;
+    }
+    if (FindMayaPlug("visibleInDiffuseReflections").asBool()) {
+        visibility |= AI_RAY_DIFFUSE_REFLECT;
+    }
+    if (FindMayaPlug("visibleInSpecularReflections").asBool()) {
+        visibility |= AI_RAY_SPECULAR_REFLECT;
+    }
+    if (FindMayaPlug("visibleInSubsurface").asBool()) {
+        visibility |= AI_RAY_SUBSURFACE;
+    }
+    AiNodeSetByte(volume, "visibility", visibility);
+    AiNodeSetBool(volume, "self_shadows", FindMayaPlug("selfShadows").asBool());
+
+    // Export standard volume shader.
+    AtNode* shader = GetArnoldNode("shader");
+    AiNodeSetPtr(volume, "shader", shader);
+
+    ProcessParameter(shader, "density", AI_TYPE_FLOAT, "svDensity");
+    ProcessParameter(shader, "density_channel", AI_TYPE_STRING, "svDensityChannel");
+
+    ProcessParameter(shader, "scatter", AI_TYPE_FLOAT, "svScatter");
+    ProcessParameter(shader, "scatter_color", AI_TYPE_RGB, "svScatterColor");
+    ProcessParameter(shader, "scatter_color_channel", AI_TYPE_STRING, "svScatterColorChannel");
+    ProcessParameter(shader, "scatter_anisotropy", AI_TYPE_FLOAT, "svScatterAnisotropy");
+
+    ProcessParameter(shader, "transparent", AI_TYPE_RGB, "svTransparent");
+    ProcessParameter(shader, "transparent_channel", AI_TYPE_STRING, "svTransparentChannel");
+
+    ProcessParameter(shader, "emission_mode", AI_TYPE_INT, "svEmissionMode");
+    ProcessParameter(shader, "emission", AI_TYPE_FLOAT, "svEmission");
+    ProcessParameter(shader, "emission_color", AI_TYPE_RGB, "svEmissionColor");
+    ProcessParameter(shader, "emission_channel", AI_TYPE_STRING, "svEmissionChannel");
+
+    ProcessParameter(shader, "temperature", AI_TYPE_FLOAT, "svTemperature");
+    ProcessParameter(shader, "temperature_channel", AI_TYPE_STRING, "svTemperatureChannel");
+    ProcessParameter(shader, "blackbody_kelvin", AI_TYPE_FLOAT, "svBlackbodyKelvin");
+    ProcessParameter(shader, "blackbody_intensity", AI_TYPE_FLOAT, "svBlackbodyIntensity");
+
+    ProcessParameter(shader, "interpolation", AI_TYPE_INT, "interpolation");
+}
+#endif
 
 #if MTOA_ARCH_VERSION_NUM == 1 && MTOA_MAJOR_VERSION_NUM <= 3
 void OpenvdbTranslator::ExportMotion(AtNode* volume, unsigned int step)
