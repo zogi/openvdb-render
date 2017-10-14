@@ -125,9 +125,9 @@ void OpenvdbTranslator::Export(AtNode* volume)
     AiNodeSetStr(volume, "dso",
                  (std::string(mtoa_path) + std::string("/procedurals/volume_openvdb" PROCEDURAL_EXTENSION)).c_str());
 
-#if MTOA12
+#if MTOA_ARCH_VERSION_NUM == 1 && MTOA_MAJOR_VERSION_NUM <= 3
     ExportMatrix(volume, 0);
-#elif MTOA14
+#else
     ExportMatrix(volume);
 #endif
 
@@ -144,9 +144,9 @@ void OpenvdbTranslator::Export(AtNode* volume)
 
         MPlug shadingGroupPlug = GetNodeShadingGroup(m_dagPath.node(), instanceNum);
         if (!shadingGroupPlug.isNull()) {
-#if MTOA12
+#if MTOA_ARCH_VERSION_NUM == 1 && MTOA_MAJOR_VERSION_NUM <= 3
             shader = ExportNode(shadingGroupPlug);
-#elif MTOA14
+#else
             shader = ExportConnectedNode(shadingGroupPlug);
 #endif
             if (shader != 0) {
@@ -254,12 +254,12 @@ void OpenvdbTranslator::Export(AtNode* volume)
     AiNodeSetBool(volume, "self_shadows", FindMayaPlug("selfShadows").asBool());
 }
 
-#ifdef MTOA12
+#if MTOA_ARCH_VERSION_NUM == 1 && MTOA_MAJOR_VERSION_NUM <= 3
 void OpenvdbTranslator::ExportMotion(AtNode* volume, unsigned int step)
 {
     ExportMatrix(volume, step);
 }
-#elif MTOA14
+#else
 void OpenvdbTranslator::ExportMotion(AtNode* volume)
 {
     ExportMatrix(volume);

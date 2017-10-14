@@ -1,8 +1,6 @@
 #include <extension/Extension.h>
-#if MTOA12
+#if MTOA_ARCH_VERSION_NUM == 1 && MTOA_MAJOR_VERSION_NUM <= 3
 #include <extension/ExtensionsManager.h>
-#elif MTOA14
-#include <extension/Extension.h>
 #endif
 
 

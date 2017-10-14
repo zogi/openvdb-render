@@ -1,6 +1,7 @@
 #pragma once
 
 #include <translators/shape/ShapeTranslator.h>
+#include <utils/Version.h>
 
 #include "shader_translator.h"
 
@@ -12,9 +13,9 @@ public:
 
     virtual void Export(AtNode* volume) override;
 
-#if MTOA12
+#if MTOA_ARCH_VERSION_NUM == 1 && MTOA_MAJOR_VERSION_NUM <= 3
     virtual void ExportMotion(AtNode* volume, unsigned int step) override;
-#elif MTOA14
+#else
     virtual void ExportMotion(AtNode* volume) override;
 #endif
 
