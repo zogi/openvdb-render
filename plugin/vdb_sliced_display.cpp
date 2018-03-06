@@ -17,6 +17,7 @@
 #include <maya/MPxSubSceneOverride.h>
 #include <maya/MSelectionList.h>
 #include <maya/MShaderManager.h>
+#include <maya/MStateManager.h>
 #include <maya/MStatus.h>
 #include <maya/MString.h>
 #include <maya/MSyntax.h>
@@ -744,7 +745,7 @@ class RampTextureBase {
 public:
     operator bool() const { return m_texture.get() != nullptr; }
     MStatus assignToShader(MHWRender::MShaderInstance* shader, const MString& parameter) const;
-    const MSamplerState& getSamplerState() const { return *m_ramp_sampler_state; }
+    const MHWRender::MSamplerState& getSamplerState() const { return *m_ramp_sampler_state; }
 
     void setResolution(unsigned int resolution);
 
@@ -1647,7 +1648,7 @@ void VolumeShader::preDrawCallback(MHWRender::MDrawContext& context, const MHWRe
         // Rasterization state.
         MHWRender::MRasterizerStateDesc raster_state_desc;
         raster_state_desc.setDefaults();
-        raster_state_desc.cullMode = MRasterizerState::kCullNone;
+        raster_state_desc.cullMode = MHWRender::MRasterizerState::kCullNone;
         CHECK_MSTATUS(state_manager->setRasterizerState(state_manager->acquireRasterizerState(raster_state_desc)));
     }
 

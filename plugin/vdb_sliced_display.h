@@ -2,6 +2,7 @@
 
 #include "vdb_visualizer.h"
 #include <maya/MPxCommand.h>
+#include <maya/MPxSubSceneOverride.h>
 #include <memory>
 
 enum class VDBSlicedDisplayChangeSet : uint32_t {
